@@ -29,18 +29,7 @@ def setup_logging(verbose: bool) -> None:
 cache = cachetools.TTLCache(maxsize=100, ttl=3600)  # Cache for 1 hour
 
 async def fetch_wayback_links(domain: str) -> list[str]:
-    """Fetch unique URLs from Wayback Machine for a given domain.
-
-    Args:
-        domain (str): The target domain (e.g., example.com).
-
-    Returns:
-        list[str]: A list of unique URLs retrieved from the Wayback Machine.
-
-    Raises:
-        aiohttp.ClientError: If the HTTP request fails.
-    """
-    # Check cache first
+    """Fetch unique URLs from Wayback Machine for a given domain."""
     if domain in cache:
         logger.info(f"{Fore.YELLOW}Returning cached links for {domain}{Style.RESET_ALL}")
         return cache[domain]
@@ -52,7 +41,7 @@ async def fetch_wayback_links(domain: str) -> list[str]:
                 if response.status == 200:
                     text = await response.text()
                     links = list(set(text.splitlines()))
-                    cache[domain] = links  # Store in cache
+                    cache[domain] = links
                     logger.info(f"{Fore.GREEN}Fetched {len(links)} unique links for {domain}{Style.RESET_ALL}")
                     return links
                 else:
@@ -63,21 +52,19 @@ async def fetch_wayback_links(domain: str) -> list[str]:
         return []
 
 def categorize_links(links: list[str]) -> tuple[defaultdict, list[str], list[str], list[str]]:
-    """Categorize URLs based on file extensions, emails, and sensitive keywords.
-
-    Args:
-        links (list[str]): List of URLs to categorize.
-
-    Returns:
-        tuple: (categorized links, email links, sensitive links, JS files).
-    """
+    """Categorize URLs based on file extensions, emails, and sensitive keywords."""
     file_extensions = re.compile(
         r'.*\.(js|xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar\.gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|gz|git|config|csv|yaml|md|md5|exe|dll|bin|ini|bat|sh|tar|deb|rpm|iso|img|apk|msi|env|dmg|tmp|crt|pem|key|pub|asc)$',
         re.IGNORECASE
     )
     email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
     sensitive_pattern = re.compile(
-        r'(api_key|secret|token|password|private|confidential|ssn|credit_card|auth|key|access_token|client_secret)',
+        r'(api_key|secret|token|password|private|confidential|ssn|credit_card|auth|key|access_token|client_secret|username|email|oauth|bearer|jwt|'
+        r'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|'
+        r'AZIA[0-9A-Z]{16}|'
+        r'AUZA[0-9A-Z]{16}|'
+        r'AIza[0-9A-Za-z\-_]{35}|'
+        r'4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|6(?:011|5[0-9]{2})[0-9]{12}',  # Credit card patterns
         re.IGNORECASE
     )
     categorized = defaultdict(list)
@@ -101,17 +88,14 @@ def categorize_links(links: list[str]) -> tuple[defaultdict, list[str], list[str
     return categorized, email_links, sensitive_links, js_files
 
 async def analyze_js_files(js_links: list[str], quiet_js: bool) -> list[tuple[str, set[str]]]:
-    """Analyze JavaScript files for sensitive data.
-
-    Args:
-        js_links (list[str]): List of JavaScript URLs to analyze.
-        quiet_js (bool): If True, suppress CLI output of sensitive data findings.
-
-    Returns:
-        list[tuple[str, set[str]]]: List of tuples containing URL and found sensitive keywords.
-    """
+    """Analyze JavaScript files for sensitive data."""
     sensitive_pattern = re.compile(
-        r'(api_key|secret|token|password|private|confidential|ssn|credit_card|auth|key|access_token|client_secret)',
+        r'(api_key|secret|token|password|private|confidential|ssn|credit_card|auth|key|access_token|client_secret|username|email|oauth|bearer|jwt|'
+        r'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|'
+        r'AZIA[0-9A-Z]{16}|'
+        r'AUZA[0-9A-Z]{16}|'
+        r'AIza[0-9A-Za-z\-_]{35}|'
+        r'4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|6(?:011|5[0-9]{2})[0-9]{12}',  # Credit card patterns
         re.IGNORECASE
     )
     results = []
@@ -143,19 +127,9 @@ async def analyze_js_files(js_links: list[str], quiet_js: bool) -> list[tuple[st
     return results
 
 def clean_filename(domain: str) -> str:
-    """Clean domain name to create a safe filename.
-
-    Args:
-        domain (str): The domain or URL to clean.
-
-    Returns:
-        str: A cleaned filename-safe string.
-    """
-    # Extract netloc from URL
+    """Clean domain name to create a safe filename."""
     parsed = urlparse(domain if domain.startswith(('http://', 'https://')) else f'http://{domain}')
     domain_clean = parsed.netloc or domain
-
-    # Remove invalid characters for filenames
     domain_clean = re.sub(r'[^\w\-\.]', '_', domain_clean)
     return domain_clean
 
@@ -168,45 +142,30 @@ def save_results(
     js_analysis: list[tuple[str, set[str]]],
     all_links: list[str]
 ) -> None:
-    """Save categorized links and analysis results to files.
-
-    Args:
-        output_folder (str): Directory to save output files.
-        domain (str): The target domain.
-        categorized_links (defaultdict): Categorized links by file extension.
-        email_links (list[str]): Links containing emails.
-        sensitive_links (list[str]): Links with sensitive keywords.
-        js_analysis (list[tuple[str, set[str]]]): Results of JS file analysis.
-        all_links (list[str]): All collected links.
-    """
+    """Save categorized links and analysis results to files."""
     os.makedirs(output_folder, exist_ok=True)
     domain_filename = clean_filename(domain)
 
-    # Save all links
     with open(f"{output_folder}/{domain_filename}-all-links.txt", "w", encoding="utf-8") as file:
         file.write("\n".join(sorted(set(all_links))))
     logger.info(f"{Fore.BLUE}Saved all links to {output_folder}/{domain_filename}-all-links.txt{Style.RESET_ALL}")
 
-    # Save categorized links
     for ext, links in categorized_links.items():
         filename = f"{output_folder}/{domain_filename}-{ext}.txt"
         with open(filename, "w", encoding="utf-8") as file:
             file.write("\n".join(links))
         logger.info(f"{Fore.CYAN}Saved {ext} links to {filename}{Style.RESET_ALL}")
 
-    # Save email links
     if email_links:
         with open(f"{output_folder}/{domain_filename}-emails.txt", "w", encoding="utf-8") as file:
             file.write("\n".join(email_links))
         logger.info(f"{Fore.YELLOW}Saved email links to {output_folder}/{domain_filename}-emails.txt{Style.RESET_ALL}")
 
-    # Save sensitive links
     if sensitive_links:
         with open(f"{output_folder}/{domain_filename}-sensitive.txt", "w", encoding="utf-8") as file:
             file.write("\n".join(sensitive_links))
         logger.info(f"{Fore.RED}Saved sensitive links to {output_folder}/{domain_filename}-sensitive.txt{Style.RESET_ALL}")
 
-    # Save JS analysis
     if js_analysis:
         with open(f"{output_folder}/{domain_filename}-js-analysis.txt", "w", encoding="utf-8") as file:
             for url, matches in js_analysis:
@@ -227,19 +186,14 @@ async def main() -> None:
     domain = args.url
     output_folder = args.output
 
-    # Setup logging before printing anything
     setup_logging(args.verbose)
-
-    # Initialize logger after setup
     global logger
     logger = logging.getLogger(__name__)
 
-    # Print logo and description
     logo = pyfiglet.figlet_format("oldRASHED")
     logger.info(f"{Fore.RED}{logo}{Style.RESET_ALL}")
     logger.info(f"{Fore.CYAN}OSINT TOOL - Wayback Machine Scraper{Style.RESET_ALL}")
 
-    # Validate domain
     if not validators.domain(domain) and not validators.url(domain):
         logger.error(f"{Fore.RED}Invalid domain or URL: {domain}{Style.RESET_ALL}")
         return
