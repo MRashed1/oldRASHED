@@ -1,0 +1,5 @@
+aiohttp>=3.8.0
+cachetools>=5.0.0
+colorama>=0.4.6
+pyfiglet>=0.8.0
+validators>=0.20.0
