@@ -12,8 +12,8 @@
 
 - **Asynchronous URL Fetching**: Fetches archived URLs using non-blocking I/O for better performance.
 - **Link Categorization**: Organizes URLs by file extensions (e.g., `.js`, `.pdf`, `.txt`, etc.).
-- **Sensitive Data Extraction**: Detects email addresses and sensitive keywords (e.g., `api_key`, `password`).
-- **JavaScript Analysis (Optional)**: Asynchronously scans JavaScript files for sensitive information.
+- **Sensitive Data Extraction**: Detects email addresses and sensitive keywords (e.g., `api_key`, `password`, `AKIA`, `AIza`).
+- **JavaScript Analysis (Optional)**: Asynchronously scans JavaScript files for sensitive data, including API keys (AWS, Google) and credit card patterns.
 - **Customizable Output**: Saves results into categorized files (all links, emails, sensitive data, JS analysis).
 - **CLI Output Control**: Suppress JavaScript analysis output in the CLI with `--quiet-js` while still saving results.
 
@@ -101,8 +101,8 @@ Process completed!
 
 ### JS Analysis File (`example.com-js-analysis.txt`)
 ```
-https://static.example.com/js/app.js -> password, auth, key
-https://static.example.com/js/config.js -> token, secret
+https://static.example.com/js/app.js -> AKIA1234567890ABCDEF, password, auth
+https://static.example.com/js/config.js -> AizaSyABC123xyz789-DEFghiJKLm, token
 ```
 
 ## ⚙️ Setup for Global Access (Optional)
@@ -128,9 +128,12 @@ To run `oldRASHED` from anywhere on your system:
 
 - Use `--verbose` for detailed logs if you encounter issues.
 - The `--cache` option helps speed up repeated scans by caching results for 1 hour.
-- Ensure you have proper permissions when moving the script to a global directory.
+- The JavaScript analysis focuses on specific patterns (e.g., AWS API keys, Google API keys, credit card numbers) and common sensitive keywords.
 
 ## 🤝 Contributing
 
 Feel free to fork the repository, make improvements, and submit pull requests. If you encounter bugs or have feature requests, open an issue on GitHub.
 
+## 📜 License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
