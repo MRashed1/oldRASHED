@@ -2,21 +2,23 @@
 
 ![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)  
 ![License](https://img.shields.io/badge/License-MIT-green.svg)  
-![Version](https://img.shields.io/badge/Version-1.1.0-yellow.svg)
+![Version](https://img.shields.io/badge/Version-1.2.0-yellow.svg)
 
 ## 📖 Overview
 
-**oldRASHED** is a powerful OSINT (Open-Source Intelligence) tool designed to extract archived URLs from the [Wayback Machine](https://archive.org/web/). It helps security researchers and OSINT enthusiasts by categorizing links, extracting sensitive data like email addresses and API keys, and optionally analyzing JavaScript files for sensitive information. Built with asynchronous programming (`aiohttp` & `asyncio`) and enhanced with precise regex patterns inspired by [Mantra](https://github.com/brosck/mantra), it ensures efficient, accurate, and fast performance.
+**oldRASHED** is a powerful OSINT (Open-Source Intelligence) tool designed to extract archived URLs from the [Wayback Machine](https://archive.org/web/). It helps security researchers and OSINT enthusiasts by categorizing links, extracting sensitive data like email addresses and API keys, and optionally analyzing JavaScript files for sensitive information. Built with asynchronous programming (`aiohttp` & `asyncio`) and enhanced with precise regex patterns inspired by [Mantra](https://github.com/brosck/mantra), it ensures efficient, accurate, and fast performance with streaming for large files and robust error handling.
 
 ## ✨ Features
 
-- **Asynchronous URL Fetching**: Fetches archived URLs using non-blocking I/O for better performance.
-- **Link Categorization**: Organizes URLs by file extensions (e.g., `.js`, `.pdf`, `.txt`, etc.).
+- **Asynchronous URL Fetching**: Fetches archived URLs using non-blocking I/O with streaming for better performance.
+- **Link Categorization**: Organizes URLs by file extensions (e.g., `.js`, `.pdf`, `.txt`, etc.) and sensitive keywords (e.g., `/admin`, `/api`).
 - **Sensitive Data Extraction**: Detects email addresses and sensitive data with precise patterns for services like AWS, Google, Slack, Firebase, Twilio, Discord, GitHub, Heroku, Shopify, Stripe, and more.
-- **JavaScript Analysis (Optional)**: Asynchronously scans JavaScript files for sensitive data, including API keys, tokens, passwords, and credit card patterns, with detailed logging.
-- **Improved Logging**: Clear, structured logs inspired by Mantra, showing specific leak types (e.g., "AWS Access Key", "Slack Token") to reduce false positives.
+- **JavaScript Analysis (Optional)**: Asynchronously scans JavaScript files for sensitive data (API keys, tokens, passwords) with Content-Type verification to ensure only JavaScript files are analyzed.
+- **Wayback Machine Integration**: Fetches the latest archived snapshots for JavaScript files using the `--way` flag, with improved rate limiting handling (exponential backoff with jitter).
+- **Improved Logging**: Detailed logs showing specific leak types, HTTP errors, Content-Type, and file size issues to reduce false positives and debug failures.
 - **Customizable Output**: Saves results into categorized files with clear labels for each leak type (all links, emails, sensitive data, JS analysis).
 - **CLI Output Control**: Suppress JavaScript analysis output in the CLI with `--quiet-js` while still saving results.
+- **Robust Error Handling**: Handles rate limits, timeouts, and failed requests with retries and detailed logging for easier troubleshooting.
 
 ## 🛠️ Requirements
 
@@ -41,14 +43,20 @@
 
 ### Command-Line Options
 
-| Option          | Description                                                                 | Required | Default      |
-|-----------------|-----------------------------------------------------------------------------|----------|--------------|
-| `-u`, `--url`   | Target domain (e.g., `example.com`).                                       | Yes      | N/A          |
+| Option            | Description                                                                 | Required | Default      |
+|-------------------|-----------------------------------------------------------------------------|----------|--------------|
+| `-u`, `--url`     | Target domain (e.g., `example.com`).                                       | Yes      | N/A          |
 | `-a`, `--analyze-js` | Enable JavaScript file analysis for sensitive data.                    | No       | Disabled     |
-| `-o`, `--output` | Specify the output directory for results.                              | No       | `output`     |
-| `--cache`       | Enable caching of fetched links to reduce redundant requests.          | No       | Disabled     |
-| `--verbose`     | Enable verbose logging with timestamps for detailed output.            | No       | Disabled     |
-| `--quiet-js`    | Suppress JavaScript analysis output in the CLI (results still saved).  | No       | Disabled     |
+| `-o`, `--output`  | Specify the output directory for results.                              | No       | `output`     |
+| `--cache`         | Enable caching of fetched links to reduce redundant requests.          | No       | Disabled     |
+| `--verbose`       | Enable verbose logging with timestamps for detailed output.            | No       | Disabled     |
+| `--quiet-js`      | Suppress JavaScript analysis output in the CLI (results still saved).  | No       | Disabled     |
+| `-w`, `--way`     | Fetch JavaScript files from the latest Wayback Machine archives.       | No       | Disabled     |
+| `--timeout`       | Timeout for HTTP requests in seconds.                                  | No       | 300          |
+| `--retries`       | Number of retries for failed requests.                                 | No       | 3            |
+| `--concurrent`    | Max concurrent connections.                                           | No       | 3            |
+| `--delay`         | Delay between requests in seconds.                                    | No       | 1.0          |
+| `--max-file-size` | Max file size for JS files in MB.                                     | No       | 5            |
 
 ### Example Commands
 
@@ -62,14 +70,14 @@
    python3 oldRASHED.py -u example.com -a
    ```
 
-3. **With JavaScript Analysis (Quiet Mode)**:
+3. **With JavaScript Analysis from Wayback Machine (Latest Snapshots)**:
    ```bash
-   python3 oldRASHED.py -u example.com -a --quiet-js
+   python3 oldRASHED.py -u example.com -a -w --timeout 600 --retries 5 --concurrent 3 --delay 1 --max-file-size 5
    ```
 
-4. **Verbose Output with Custom Directory**:
+4. **Verbose Output with Custom Directory and Quiet JS Analysis**:
    ```bash
-   python3 oldRASHED.py -u example.com -a -o results --verbose
+   python3 oldRASHED.py -u example.com -a -w -o results --verbose --quiet-js
    ```
 
 ### Output Files
@@ -79,32 +87,38 @@ Results are saved in the specified output directory (default: `output`). Example
 - `example.com-all-links.txt`: All fetched URLs.
 - `example.com-js.txt`: URLs with `.js` extension.
 - `example.com-emails.txt`: URLs containing email addresses.
-- `example.com-sensitive.txt`: URLs with sensitive data, labeled by leak type (e.g., `[AWS Access Key]`).
+- `example.com-sensitive-links.txt`: URLs with sensitive keywords, labeled by type (e.g., `[admin]`, `[api]`).
 - `example.com-js-analysis.txt`: Results of JavaScript file analysis with detailed leak types (if enabled).
+- `example.com-failed-js.txt`: URLs of JavaScript files that failed to fetch or analyze.
 
 ## 📜 Example Output
 
-### CLI Output (With `--quiet-js`)
+### CLI Output (With `--verbose` and `--way`)
 ```
 oldRASHED
 OSINT TOOL - Wayback Machine Scraper
+Using timeout of 600 seconds for HTTP requests
+Using Wayback Machine archives for JavaScript analysis
 Starting data collection for example.com...
-Fetched 123 unique links for example.com...
+Fetched 123 unique links for example.com in 2.34 seconds
 Categorizing links...
-Categorized 123 links: 5 emails, 10 sensitive matches, 15 JS files
+Categorized 123 links: 5 emails, 10 sensitive links, 15 JS files in 0.12 seconds
 Analyzing JavaScript files for sensitive data...
-Analyzed 15 JS files, found sensitive data in 8 files
+Fetching latest archived URL: https://web.archive.org/web/20230101010101/https://static.example.com/js/app.js
+Found sensitive data in https://static.example.com/js/app.js
+Analyzed 15 JS files, found sensitive data in 8 files in 5.67 seconds
 Saving results...
 Saved all links to output/example.com-all-links.txt
-Saved sensitive matches to output/example.com-sensitive.txt
+Saved sensitive links to output/example.com-sensitive-links.txt
 Saved JS analysis to output/example.com-js-analysis.txt
 Process completed!
 ```
 
-### Sensitive Data File (`example.com-sensitive.txt`)
+### Sensitive Links File (`example.com-sensitive-links.txt`)
 ```
-[AWS Access Key] https://example.com/config?key=AKIA1234567890ABCDEF -> AKIA1234567890ABCDEF
-[Slack Token] https://example.com/js/app.js?token=xoxb-1234567890 -> xoxb-1234567890
+[admin] https://example.com/admin
+[api] https://example.com/api/v1
+[query_params] https://example.com/config?key=abc123xyz789
 ```
 
 ### JS Analysis File (`example.com-js-analysis.txt`)
@@ -133,15 +147,17 @@ To run `oldRASHED` from anywhere on your system:
 
 3. Run the tool from anywhere:
    ```bash
-   oldrashed -u example.com -a
+   oldrashed -u example.com -a -w
    ```
 
 ## 📝 Notes
 
-- Use `--verbose` for detailed logs if you encounter issues.
-- The `--cache` option helps speed up repeated scans by caching results for 1 hour.
+- Use `--verbose` with `--way` to debug issues with fetching archived snapshots (e.g., rate limiting or empty snapshots).
+- The `--cache` option speeds up repeated scans by caching results for 1 hour.
 - The JavaScript analysis uses precise regex patterns inspired by [Mantra](https://github.com/brosck/mantra) to detect specific leaks (e.g., AWS, Slack, Firebase) with reduced false positives.
-- Expand the `SENSITIVE_PATTERNS` dictionary in the script to add new regex patterns for custom leak detection.
+- Expand the `SENSITIVE_PATTERNS` or `SENSITIVE_LINK_KEYWORDS` dictionaries in the script to add custom regex patterns for specific leak detection.
+- The `--way` flag fetches the latest snapshots from Wayback Machine, which may improve results if older snapshots are empty or outdated.
+- If no sensitive data is found, check `output/[domain]-failed-js.txt` for failed JavaScript files and use `--verbose` to inspect errors.
 - The tool focuses on static analysis of JavaScript files but can be extended to analyze web pages like Mantra.
 
 ## 🤝 Contributing
